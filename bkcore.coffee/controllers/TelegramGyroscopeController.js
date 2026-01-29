@@ -46,6 +46,15 @@
         // Reference to WebApp
         this.webApp = null;
         
+        // Debug mode properties
+        this.debugMode = false;
+        this.signalHistory = [];
+        this.maxHistorySize = 50;
+        this.signalCount = 0;
+        this.lastSignalTime = 0;
+        this.avgSignalInterval = 0;
+        this.signalTimestamps = [];
+        
         // Initialize
         this.init();
     };
@@ -181,6 +190,9 @@
                     yaw: data.yaw || 0
                 };
                 _this.updateControlValues();
+                
+                // Log signal reception in debug mode
+                _this.logSignal(data);
             });
             
             // Listen for orientation lock status
@@ -224,6 +236,14 @@
         };
         
         this.updateControlValues();
+        
+        // Log signal reception in debug mode (fallback mode)
+        this.logSignal({
+            pitch: this.gyroscopeData.pitch,
+            roll: this.gyroscopeData.roll,
+            yaw: this.gyroscopeData.yaw,
+            x: 0, y: 0, z: 0
+        });
     };
 
     /**
@@ -373,6 +393,270 @@
      */
     TelegramGyroscopeController.prototype.deactivate = function() {
         this.active = false;
+    };
+
+    /**
+     * Enable debug mode
+     */
+    TelegramGyroscopeController.prototype.enableDebug = function() {
+        this.debugMode = true;
+        this.signalHistory = [];
+        this.signalCount = 0;
+        this.signalTimestamps = [];
+        this.lastSignalTime = Date.now();
+        console.log('%c[TelegramGyroscopeController] Debug mode enabled', 'color: #00ff00; font-weight: bold; background: #1a1a1a; padding: 4px;');
+    };
+
+    /**
+     * Disable debug mode
+     */
+    TelegramGyroscopeController.prototype.disableDebug = function() {
+        this.debugMode = false;
+        console.log('%c[TelegramGyroscopeController] Debug mode disabled', 'color: #ff6666; font-weight: bold; background: #1a1a1a; padding: 4px;');
+    };
+
+    /**
+     * Toggle debug mode
+     */
+    TelegramGyroscopeController.prototype.toggleDebug = function() {
+        if (this.debugMode) {
+            this.disableDebug();
+        } else {
+            this.enableDebug();
+        }
+        return this.debugMode;
+    };
+
+    /**
+     * Log gyroscope signal reception
+     */
+    TelegramGyroscopeController.prototype.logSignal = function(data) {
+        if (!this.debugMode) return;
+        
+        var timestamp = Date.now();
+        var interval = timestamp - this.lastSignalTime;
+        this.lastSignalTime = timestamp;
+        
+        // Update signal statistics
+        this.signalCount++;
+        this.signalTimestamps.push(timestamp);
+        if (this.signalTimestamps.length > 10) {
+            this.signalTimestamps.shift();
+        }
+        
+        // Calculate average interval from recent timestamps
+        if (this.signalTimestamps.length >= 2) {
+            var totalInterval = 0;
+            for (var i = 1; i < this.signalTimestamps.length; i++) {
+                totalInterval += this.signalTimestamps[i] - this.signalTimestamps[i-1];
+            }
+            this.avgSignalInterval = totalInterval / (this.signalTimestamps.length - 1);
+        }
+        
+        // Store in history
+        var signalRecord = {
+            timestamp: timestamp,
+            interval: interval,
+            data: {
+                x: data.x || 0,
+                y: data.y || 0,
+                z: data.z || 0,
+                pitch: data.pitch || 0,
+                roll: data.roll || 0,
+                yaw: data.yaw || 0
+            },
+            controlValues: {
+                steering: this.steering,
+                throttle: this.throttle,
+                pitchValue: this.pitchValue
+            }
+        };
+        
+        this.signalHistory.push(signalRecord);
+        if (this.signalHistory.length > this.maxHistorySize) {
+            this.signalHistory.shift();
+        }
+        
+        // Log to console with styling
+        console.log(
+            '%c[SIGNAL] %c#' + this.signalCount + '%c | ' +
+            'Int: ' + interval + 'ms ' +
+            '(Avg: ' + this.avgSignalInterval.toFixed(1) + 'ms) | ' +
+            'Pitch: ' + (data.pitch || 0).toFixed(2) + ' | ' +
+            'Roll: ' + (data.roll || 0).toFixed(2) + ' | ' +
+            'Yaw: ' + (data.yaw || 0).toFixed(2) + ' | ' +
+            'Steering: ' + this.steering.toFixed(3) + ' | ' +
+            'Throttle: ' + this.throttle.toFixed(3),
+            'color: #00ffff; font-weight: bold;',
+            'color: #ffff00;',
+            'color: #cccccc;'
+        );
+        
+        // Log raw data periodically (every 10 signals)
+        if (this.signalCount % 10 === 0) {
+            console.log('%c[RAW DATA] ' + JSON.stringify(data), 'color: #ff99ff; font-style: italic;');
+        }
+    };
+
+    /**
+     * Get debug information
+     */
+    TelegramGyroscopeController.prototype.getDebugInfo = function() {
+        return {
+            active: this.active,
+            ready: this.ready,
+            debugMode: this.debugMode,
+            signalCount: this.signalCount,
+            avgSignalInterval: this.avgSignalInterval,
+            lastSignalTime: this.lastSignalTime,
+            gyroscopeData: {
+                x: this.gyroscopeData.x,
+                y: this.gyroscopeData.y,
+                z: this.gyroscopeData.z,
+                pitch: this.gyroscopeData.pitch,
+                roll: this.gyroscopeData.roll,
+                yaw: this.gyroscopeData.yaw
+            },
+            controlValues: {
+                steering: this.steering,
+                throttle: this.throttle,
+                pitchValue: this.pitchValue
+            },
+            calibration: {
+                offsetPitch: this.offsetPitch,
+                offsetRoll: this.offsetRoll,
+                offsetYaw: this.offsetYaw
+            },
+            sensitivity: {
+                steering: this.steeringSensitivity,
+                throttle: this.throttleSensitivity,
+                pitch: this.pitchSensitivity
+            },
+            webApp: this.webApp ? {
+                expanded: this.webApp.expanded,
+                viewportHeight: this.webApp.viewportHeight,
+                viewportWidth: this.webApp.viewportWidth
+            } : null
+        };
+    };
+
+    /**
+     * Get signal statistics
+     */
+    TelegramGyroscopeController.prototype.getSignalStats = function() {
+        return {
+            totalSignals: this.signalCount,
+            avgInterval: this.avgSignalInterval,
+            lastInterval: this.signalHistory.length > 0 ? 
+                this.signalHistory[this.signalHistory.length - 1].interval : 0,
+            historySize: this.signalHistory.length,
+            maxHistorySize: this.maxHistorySize,
+            isReceiving: this.debugMode && this.signalCount > 0 && 
+                (Date.now() - this.lastSignalTime) < 1000
+        };
+    };
+
+    /**
+     * Get signal history
+     */
+    TelegramGyroscopeController.prototype.getSignalHistory = function(count) {
+        count = count || this.maxHistorySize;
+        return this.signalHistory.slice(-count);
+    };
+
+    /**
+     * Clear signal history
+     */
+    TelegramGyroscopeController.prototype.clearSignalHistory = function() {
+        this.signalHistory = [];
+        this.signalCount = 0;
+        this.signalTimestamps = [];
+        console.log('%c[TelegramGyroscopeController] Signal history cleared', 'color: #ff9900;');
+    };
+
+    /**
+     * Simulate a gyroscope signal (for testing)
+     */
+    TelegramGyroscopeController.prototype.simulateSignal = function(pitch, roll, yaw) {
+        if (!this.debugMode) {
+            console.warn('[TelegramGyroscopeController] Debug mode must be enabled to simulate signals');
+            return false;
+        }
+        
+        var simulatedData = {
+            pitch: pitch !== undefined ? pitch : this.gyroscopeData.pitch,
+            roll: roll !== undefined ? roll : this.gyroscopeData.roll,
+            yaw: yaw !== undefined ? yaw : this.gyroscopeData.yaw,
+            x: Math.sin(roll * Math.PI / 180) * Math.cos(pitch * Math.PI / 180),
+            y: Math.sin(pitch * Math.PI / 180),
+            z: Math.sin(roll * Math.PI / 180) * Math.sin(pitch * Math.PI / 180)
+        };
+        
+        console.log('%c[SIMULATED] Pitch: ' + simulatedData.pitch.toFixed(2) + 
+                   ' | Roll: ' + simulatedData.roll.toFixed(2) + 
+                   ' | Yaw: ' + simulatedData.yaw.toFixed(2), 'color: #00ff00; font-style: italic;');
+        
+        // Process the simulated data as if it came from the gyroscope
+        this.gyroscopeData = simulatedData;
+        this.updateControlValues();
+        
+        // Log it
+        this.logSignal(simulatedData);
+        
+        return true;
+    };
+
+    /**
+     * Print debug report to console
+     */
+    TelegramGyroscopeController.prototype.printDebugReport = function() {
+        if (!this.debugMode) {
+            console.warn('[TelegramGyroscopeController] Debug mode must be enabled to print report');
+            return;
+        }
+        
+        var info = this.getDebugInfo();
+        var stats = this.getSignalStats();
+        
+        console.log('%c═══════════════════════════════════════════════════════════════', 'color: #00ff00;');
+        console.log('%c         TELEGRAM GYROSCOPE CONTROLLER DEBUG REPORT', 'color: #00ff00; font-weight: bold;');
+        console.log('%c═══════════════════════════════════════════════════════════════', 'color: #00ff00;');
+        console.log('');
+        console.log('%cSTATUS', 'color: #ffff00; font-weight: bold;');
+        console.log('  Active: ' + (info.active ? '✓' : '✗'));
+        console.log('  Ready: ' + (info.ready ? '✓' : '✗'));
+        console.log('  Debug Mode: ' + (info.debugMode ? '✓' : '✗'));
+        console.log('');
+        console.log('%cSIGNAL STATISTICS', 'color: #ffff00; font-weight: bold;');
+        console.log('  Total Signals: ' + stats.totalSignals);
+        console.log('  Avg Interval: ' + stats.avgInterval.toFixed(2) + 'ms');
+        console.log('  Last Interval: ' + stats.lastInterval + 'ms');
+        console.log('  Receiving: ' + (stats.isReceiving ? '✓' : '✗'));
+        console.log('');
+        console.log('%cGYROSCOPE DATA', 'color: #ffff00; font-weight: bold;');
+        console.log('  Pitch: ' + info.gyroscopeData.pitch.toFixed(3));
+        console.log('  Roll: ' + info.gyroscopeData.roll.toFixed(3));
+        console.log('  Yaw: ' + info.gyroscopeData.yaw.toFixed(3));
+        console.log('  X: ' + info.gyroscopeData.x.toFixed(3));
+        console.log('  Y: ' + info.gyroscopeData.y.toFixed(3));
+        console.log('  Z: ' + info.gyroscopeData.z.toFixed(3));
+        console.log('');
+        console.log('%cCONTROL VALUES', 'color: #ffff00; font-weight: bold;');
+        console.log('  Steering: ' + info.controlValues.steering.toFixed(3));
+        console.log('  Throttle: ' + info.controlValues.throttle.toFixed(3));
+        console.log('  Pitch Value: ' + info.controlValues.pitchValue.toFixed(3));
+        console.log('');
+        console.log('%cCALIBRATION', 'color: #ffff00; font-weight: bold;');
+        console.log('  Offset Pitch: ' + info.calibration.offsetPitch.toFixed(3));
+        console.log('  Offset Roll: ' + info.calibration.offsetRoll.toFixed(3));
+        console.log('  Offset Yaw: ' + info.calibration.offsetYaw.toFixed(3));
+        console.log('');
+        console.log('%cSENSITIVITY', 'color: #ffff00; font-weight: bold;');
+        console.log('  Steering: ' + info.sensitivity.steering);
+        console.log('  Throttle: ' + info.sensitivity.throttle);
+        console.log('  Pitch: ' + info.sensitivity.pitch);
+        console.log('');
+        console.log('%c═══════════════════════════════════════════════════════════════', 'color: #00ff00;');
     };
 
     /**
