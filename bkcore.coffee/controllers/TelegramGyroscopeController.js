@@ -25,6 +25,7 @@
         };
         
         // Calibration offsets
+        this.calibrated = false;
         this.offsetPitch = 0;
         this.offsetRoll = 0;
         this.offsetYaw = 0;
@@ -240,9 +241,17 @@
      * Handle device orientation change (fallback mode)
      */
     TelegramGyroscopeController.prototype.orientationChange = function(event) {
-        if (!this.active) return;
+        // Auto-calibrate on first orientation event if not already calibrated
+        if (!this.calibrated && event.beta !== null && event.gamma !== null) {
+            this.calibrated = true;
+            this.offsetPitch = event.beta || 0;
+            this.offsetRoll = event.gamma || 0;
+            this.offsetYaw = event.alpha || 0;
+            console.log('Gyroscope auto-calibrated: pitch=' + this.offsetPitch.toFixed(2) + ', roll=' + this.offsetRoll.toFixed(2));
+        }
         
-        // Store raw orientation data
+        // Store raw orientation data even if not yet marked active
+        // This allows the controller to start working before explicit activation
         this.gyroscopeData = {
             alpha: event.alpha || 0,  // Z-axis rotation
             beta: event.beta || 0,    // X-axis rotation
@@ -392,9 +401,11 @@
 
     /**
      * Check if controller is ready and active
+     * Also checks if signals have been received (more lenient for edge cases)
      */
     TelegramGyroscopeController.prototype.isReady = function() {
-        return this.ready && this.active;
+        // Controller is ready if active and either ready flag is set or we've received signals
+        return this.active && (this.ready || this.signalCount > 0 || this.gyroscopeData.pitch !== 0 || this.gyroscopeData.roll !== 0);
     };
 
     /**

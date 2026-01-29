@@ -191,6 +191,8 @@ bkcore.hexgl.ShipControls = function(ctx)
 			this.telegramGyroscopeController.requestPermission(function(success) {
 				if(success) {
 					console.log('Telegram gyroscope activated');
+					// Activate the controller (sets both active and ready to true)
+					_this.telegramGyroscopeController.activate();
 					// Lock orientation for better gameplay
 					_this.telegramGyroscopeController.lockOrientation();
 					// Update indicator
