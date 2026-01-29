@@ -63,10 +63,27 @@
      * Check if Telegram WebApp with gyroscope support is available
      */
     TelegramGyroscopeController.isCompatible = function() {
+        // Full Telegram WebApp support
+        if (typeof window !== 'undefined' && 
+            typeof window.Telegram !== 'undefined' &&
+            typeof window.Telegram.WebApp !== 'undefined' &&
+            typeof window.Telegram.WebApp.requestGyroscopePermission === 'function') {
+            return true;
+        }
+        // Fallback: Check if DeviceOrientation is available (for non-Telegram environments)
+        if (typeof window !== 'undefined' && 'DeviceOrientationEvent' in window) {
+            return true;
+        }
+        return false;
+    };
+
+    /**
+     * Check if running in actual Telegram WebApp
+     */
+    TelegramGyroscopeController.isTelegramWebApp = function() {
         return typeof window !== 'undefined' && 
                typeof window.Telegram !== 'undefined' &&
-               typeof window.Telegram.WebApp !== 'undefined' &&
-               typeof window.Telegram.WebApp.requestGyroscopePermission === 'function';
+               typeof window.Telegram.WebApp !== 'undefined';
     };
 
     /**
