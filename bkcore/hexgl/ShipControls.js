@@ -120,7 +120,8 @@ bkcore.hexgl.ShipControls = function(ctx)
 
 	this.touchController = null;
 	this.orientationController = null;
-	this.gamepadController = null
+	this.gamepadController = null;
+	this.telegramGyroscopeController = null;
 
 	if(ctx.controlType == 1 && bkcore.controllers.TouchController.isCompatible())
 	{
@@ -154,6 +155,34 @@ bkcore.hexgl.ShipControls = function(ctx)
 				else
 					self.key.forward = true;
 			});
+	}
+	else if(ctx.controlType == 5 && bkcore.controllers.TelegramGyroscopeController.isCompatible())
+	{
+		// Telegram Mini App gyroscope control
+		var _this = this;
+		this.telegramGyroscopeController = new bkcore.controllers.TelegramGyroscopeController(
+			domElement,
+			function(state, touch, event){
+				if(event.touches.length >= 4)
+					window.location.reload(false);
+				else if(event.touches.length == 3)
+					ctx.restart();
+				else if(event.touches.length < 1)
+					self.key.forward = false;
+				else
+					self.key.forward = true;
+			});
+		
+		// Request gyroscope permission and activate
+		this.telegramGyroscopeController.requestPermission(function(success) {
+			if(success) {
+				console.log('Telegram gyroscope activated');
+				// Lock orientation for better gameplay
+				_this.telegramGyroscopeController.lockOrientation();
+			} else {
+				console.warn('Telegram gyroscope permission denied');
+			}
+		});
 	}
 	else if(ctx.controlType == 3 && bkcore.controllers.GamepadController.isCompatible())
 	{
@@ -397,6 +426,32 @@ bkcore.hexgl.ShipControls.prototype.update = function(dt)
 		{
 			angularAmount += this.orientationController.beta/45 * this.angularSpeed * dt;
 			rollAmount -= this.orientationController.beta/45 * this.rollAngle;
+		}
+		else if(this.telegramGyroscopeController != null && this.telegramGyroscopeController.isReady())
+		{
+			// Telegram gyroscope control
+			var steering = this.telegramGyroscopeController.getSteering();
+			var throttle = this.telegramGyroscopeController.getThrottle();
+			var pitch = this.telegramGyroscopeController.getPitch();
+			
+			// Steering maps to angular movement
+			angularAmount += steering * this.angularSpeed * dt;
+			rollAmount += steering * this.rollAngle;
+			
+			// Throttle controls speed
+			if(throttle > 0.1) {
+				this.key.forward = true;
+				this.speed += throttle * this.thrust * dt;
+			} else {
+				this.key.forward = false;
+			}
+			
+			// Pitch can be used for additional drift control
+			if(pitch > 0.3) {
+				this.key.rtrigger = true;
+			} else if(pitch < -0.3) {
+				this.key.ltrigger = true;
+			}
 		}
 		else if(this.gamepadController != null && this.gamepadController.updateAvailable())
 		{

@@ -46,7 +46,7 @@
 
   defaultControls = bkcore.Utils.isTouchDevice() ? 1 : 0;
 
-  s = [['controlType', ['KEYBOARD', 'TOUCH', 'LEAP MOTION CONTROLLER', 'GAMEPAD'], defaultControls, defaultControls, 'Controls: '], ['quality', ['LOW', 'MID', 'HIGH', 'VERY HIGH'], 3, 3, 'Quality: '], ['hud', ['OFF', 'ON'], 1, 1, 'HUD: '], ['godmode', ['OFF', 'ON'], 0, 1, 'Godmode: ']];
+  s = [['controlType', ['KEYBOARD', 'TOUCH', 'LEAP MOTION CONTROLLER', 'GAMEPAD', 'DEVICE ORIENTATION', 'TELEGRAM GYROSCOPE'], defaultControls, defaultControls, 'Controls: '], ['quality', ['LOW', 'MID', 'HIGH', 'VERY HIGH'], 3, 3, 'Quality: '], ['hud', ['OFF', 'ON'], 1, 1, 'HUD: '], ['godmode', ['OFF', 'ON'], 0, 1, 'Godmode: ']];
 
   _fn = function(a) {
     var e, f, _ref;
@@ -109,6 +109,24 @@
     $('start').onclick = function() {
       $('step-1').style.display = 'none';
       $('step-2').style.display = 'block';
+      var helpImage = "url(css/help-" + s[0][3] + ".png)";
+      $('step-2').style.backgroundImage = helpImage;
+      
+      // Check if Telegram Gyroscope is selected
+      if(s[0][3] == 5) {
+          // Add Telegram-specific instructions overlay
+          var telegramInfo = document.createElement('div');
+          telegramInfo.id = 'telegram-gyro-info';
+          telegramInfo.style.cssText = 'position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);color:white;padding:15px 25px;border-radius:10px;font-family:BebasNeueRegular;font-size:16px;text-align:center;z-index:1000;';
+          telegramInfo.innerHTML = '📱 Telegram Gyroscope Mode<br><span style="font-size:12px">Hold your phone like a steering wheel<br>Tilt forward to accelerate, tilt left/right to steer</span>';
+          
+          // Remove any existing Telegram info
+          var existingInfo = document.getElementById('telegram-gyro-info');
+          if(existingInfo) existingInfo.remove();
+          
+          document.getElementById('step-2').appendChild(telegramInfo);
+      }
+      
       return $('step-2').style.backgroundImage = "url(css/help-" + s[0][3] + ".png)";
     };
   }
