@@ -123,6 +123,13 @@ bkcore.hexgl.ShipControls = function(ctx)
 	this.gamepadController = null;
 	this.telegramGyroscopeController = null;
 
+	// Telegram gyroscope indicator
+	this.telegramIndicator = null;
+	this.telegramIndicatorTimeout = null;
+
+	// Create Telegram indicator element
+	this.createTelegramIndicator();
+
 	if(ctx.controlType == 1 && bkcore.controllers.TouchController.isCompatible())
 	{
 		this.touchController = new bkcore.controllers.TouchController(
@@ -173,16 +180,48 @@ bkcore.hexgl.ShipControls = function(ctx)
 					self.key.forward = true;
 			});
 		
-		// Request gyroscope permission and activate
-		this.telegramGyroscopeController.requestPermission(function(success) {
-			if(success) {
-				console.log('Telegram gyroscope activated');
-				// Lock orientation for better gameplay
-				_this.telegramGyroscopeController.lockOrientation();
-			} else {
-				console.warn('Telegram gyroscope permission denied');
-			}
-		});
+		// Show indicator that Telegram mode is being initialized
+		this.updateTelegramIndicator('waiting', 'Telegram: Initializing...');
+		
+		// Check if Telegram WebApp is actually available
+		if (typeof window !== 'undefined' && 
+		    typeof window.Telegram !== 'undefined' && 
+		    typeof window.Telegram.WebApp !== 'undefined') {
+			// Request gyroscope permission and activate
+			this.telegramGyroscopeController.requestPermission(function(success) {
+				if(success) {
+					console.log('Telegram gyroscope activated');
+					// Lock orientation for better gameplay
+					_this.telegramGyroscopeController.lockOrientation();
+					// Update indicator
+					_this.updateTelegramIndicator('active', 'Telegram: Active ✓');
+					// Flash to confirm
+					setTimeout(function() {
+						_this.updateTelegramIndicator('active', 'Telegram: Active ✓');
+					}, 500);
+				} else {
+					console.warn('Telegram gyroscope permission denied');
+					_this.updateTelegramIndicator('error', 'Telegram: Permission Denied');
+				}
+			});
+		} else {
+			// Telegram WebApp not detected - use fallback mode
+			console.log('Telegram WebApp not detected - using DeviceOrientation fallback');
+			this.updateTelegramIndicator('active', 'Telegram: Orientation Mode');
+			
+			// Initialize with fallback orientation controller
+			this.telegramGyroscopeController.initDeviceOrientationFallback();
+			
+			// Activate immediately for fallback mode
+			setTimeout(function() {
+				if (_this.telegramGyroscopeController) {
+					_this.telegramGyroscopeController.active = true;
+					_this.telegramGyroscopeController.ready = true;
+					_this.updateTelegramIndicator('active', 'Telegram: Orientation ✓');
+					console.log('Telegram gyroscope fallback activated');
+				}
+			}, 500);
+		}
 	}
 	else if(ctx.controlType == 3 && bkcore.controllers.GamepadController.isCompatible())
 	{
@@ -321,6 +360,102 @@ bkcore.hexgl.ShipControls = function(ctx)
 	domElement.addEventListener('keyup', onKeyUp, false);
 };
 
+bkcore.hexgl.ShipControls.prototype.createTelegramIndicator = function() {
+	// Create indicator element
+	this.telegramIndicator = document.createElement('div');
+	this.telegramIndicator.id = 'telegram-indicator';
+	this.telegramIndicator.style.cssText = [
+		'position: fixed',
+		'top: 20px',
+		'right: 20px',
+		'padding: 10px 20px',
+		'border-radius: 8px',
+		'font-family: Arial, sans-serif',
+		'font-size: 14px',
+		'font-weight: bold',
+		'color: white',
+		'background-color: rgba(0, 0, 0, 0.7)',
+		'border: 2px solid #444',
+		'z-index: 9999',
+		'display: ' + (this.dom ? 'block' : 'none'),
+		'transition: all 0.3s ease',
+		'pointer-events: none'
+	].join(';');
+	
+	// Initially hide or show with initializing message
+	if (this.dom) {
+		this.telegramIndicator.textContent = 'Telegram: Gyroscope Mode';
+		this.telegramIndicator.style.backgroundColor = 'rgba(100, 100, 100, 0.9)';
+	} else {
+		this.telegramIndicator.style.display = 'none';
+	}
+	
+	// Append to document if possible
+	if (this.dom && this.dom.ownerDocument) {
+		this.dom.ownerDocument.body.appendChild(this.telegramIndicator);
+	} else if (typeof document !== 'undefined' && document.body) {
+		document.body.appendChild(this.telegramIndicator);
+	}
+	
+	console.log('Telegram indicator element created');
+};
+
+bkcore.hexgl.ShipControls.prototype.updateTelegramIndicator = function(status, message) {
+	if (!this.telegramIndicator) return;
+	
+	var colors = {
+		waiting: 'rgba(150, 150, 150, 0.9)',
+		active: 'rgba(0, 200, 100, 0.9)',
+		error: 'rgba(200, 50, 50, 0.9)',
+		receiving: 'rgba(0, 150, 255, 0.9)'
+	};
+	
+	var color = colors[status] || colors.waiting;
+	var text = message || 'Telegram: ' + status;
+	
+	this.telegramIndicator.textContent = text;
+	this.telegramIndicator.style.backgroundColor = color;
+	this.telegramIndicator.style.borderColor = status === 'active' || status === 'receiving' ? '#00ff00' : '#444';
+	
+	// Add glow effect for active/receiving states
+	if (status === 'active' || status === 'receiving') {
+		this.telegramIndicator.style.boxShadow = '0 0 15px rgba(0, 255, 100, 0.5)';
+	} else {
+		this.telegramIndicator.style.boxShadow = 'none';
+	}
+	
+	// Clear existing timeout
+	if (this.telegramIndicatorTimeout) {
+		clearTimeout(this.telegramIndicatorTimeout);
+	}
+	
+	// Auto-hide after 3 seconds if not active
+	if (status !== 'active' && status !== 'receiving') {
+		this.telegramIndicatorTimeout = setTimeout(function() {
+			if (this.telegramIndicator) {
+				this.telegramIndicator.style.opacity = '0.3';
+			}
+		}.bind(this), 3000);
+	} else {
+		this.telegramIndicator.style.opacity = '1';
+	}
+};
+
+bkcore.hexgl.ShipControls.prototype.flashTelegramIndicator = function(message) {
+	if (!this.telegramIndicator) return;
+	
+	// Flash effect
+	this.telegramIndicator.style.transition = 'none';
+	this.telegramIndicator.style.transform = 'scale(1.1)';
+	
+	setTimeout(function() {
+		this.telegramIndicator.style.transition = 'all 0.3s ease';
+		this.telegramIndicator.style.transform = 'scale(1)';
+	}.bind(this), 100);
+	
+	this.updateTelegramIndicator('receiving', message);
+};
+
 bkcore.hexgl.ShipControls.prototype.control = function(threeMesh)
 {
 	this.mesh = threeMesh;
@@ -357,6 +492,15 @@ bkcore.hexgl.ShipControls.prototype.reset = function(position, rotation)
 bkcore.hexgl.ShipControls.prototype.terminate = function()
 {
 	this.destroy();
+
+	// Clean up Telegram indicator
+	if(this.telegramIndicator && this.telegramIndicator.parentNode) {
+		this.telegramIndicator.parentNode.removeChild(this.telegramIndicator);
+	}
+	this.telegramIndicator = null;
+	if(this.telegramIndicatorTimeout) {
+		clearTimeout(this.telegramIndicatorTimeout);
+	}
 
 	if(this.leapController != null)
 	{
@@ -434,16 +578,50 @@ bkcore.hexgl.ShipControls.prototype.update = function(dt)
 			var throttle = this.telegramGyroscopeController.getThrottle();
 			var pitch = this.telegramGyroscopeController.getPitch();
 			
+			// Check if receiving signals and update indicator
+			if (this.telegramGyroscopeController.isReceivingSignals()) {
+				// Update indicator to show receiving status
+				if (this.telegramIndicator && this.telegramIndicator.style.opacity !== '1') {
+					this.telegramIndicator.style.opacity = '1';
+				}
+			}
+			
 			// Steering maps to angular movement
 			angularAmount += steering * this.angularSpeed * dt;
 			rollAmount += steering * this.rollAngle;
 			
-			// Throttle controls speed
-			if(throttle > 0.1) {
+			// Auto-accelerate when tilting left or right
+			// Tilt right -> turn right and accelerate
+			// Tilt left -> turn left and accelerate
+			var tiltThreshold = 0.1;
+			var isTilting = Math.abs(steering) > tiltThreshold;
+			
+			if (isTilting) {
+				// Auto-accelerate when tilting in any direction
 				this.key.forward = true;
-				this.speed += throttle * this.thrust * dt;
+				// Add extra speed when turning
+				this.speed += (throttle > 0.1 ? throttle : 0.5) * this.thrust * dt;
+				
+				// Flash indicator with direction
+				var direction = steering > 0 ? 'RIGHT →' : '← LEFT';
+				this.flashTelegramIndicator('Telegram: ' + direction + ' (Accelerating)');
 			} else {
-				this.key.forward = false;
+				// Not tilting - use throttle normally
+				if(throttle > 0.1) {
+					this.key.forward = true;
+					this.speed += throttle * this.thrust * dt;
+					
+					// Only flash occasionally to avoid too many updates
+					if (Math.random() < 0.1) {
+						this.flashTelegramIndicator('Telegram: Receiving');
+					}
+				} else {
+					this.key.forward = false;
+					// Show idle status occasionally
+					if (Math.random() < 0.02 && this.telegramGyroscopeController.isReceivingSignals()) {
+						this.updateTelegramIndicator('active', 'Telegram: Active (Idle)');
+					}
+				}
 			}
 			
 			// Pitch can be used for additional drift control

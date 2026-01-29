@@ -381,6 +381,29 @@
     };
 
     /**
+     * Check if signals are being received (within last second)
+     */
+    TelegramGyroscopeController.prototype.isReceivingSignals = function() {
+        return this.active && this.ready && 
+               this.signalCount > 0 && 
+               (Date.now() - this.lastSignalTime) < 1000;
+    };
+
+    /**
+     * Get last received signal timestamp
+     */
+    TelegramGyroscopeController.prototype.getLastSignalTime = function() {
+        return this.lastSignalTime;
+    };
+
+    /**
+     * Get last received steering value
+     */
+    TelegramGyroscopeController.prototype.getLastSteering = function() {
+        return this.steering;
+    };
+
+    /**
      * Activate the controller
      */
     TelegramGyroscopeController.prototype.activate = function() {
